@@ -1,0 +1,30 @@
+[package]
+name = "temp_sensor"
+version = "0.1.0"
+authors = ["junkei_okinawa <ceazy.x2.okinawan@gmail.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.77"
+
+[[bin]]
+name = "temp_sensor"
+harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "onewire_bus", version = "^1.0.2" }
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = "0.51"
+anyhow = "1.0" # エラーハンドリング用
+esp-idf-sys = "0.36.1" # EspError を直接使うために追加
+
+[build-dependencies]
+embuild = "0.33"
