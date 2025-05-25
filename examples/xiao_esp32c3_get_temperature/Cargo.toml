@@ -1,20 +1,16 @@
 [package]
-name = "simple_ds18b20_temp_sensor"
+name = "get_temperature_example"
 version = "0.1.0"
 authors = ["junkei_okinawa <ceazy.x2.okinawan@gmail.com>"]
 edition = "2021"
 resolver = "2"
 rust-version = "1.77"
 
-[lib]
-name = "simple_ds18b20_temp_sensor"
-path = "src/lib.rs"
-
 [profile.release]
 opt-level = "s"
 
 [profile.dev]
-debug = true    # Symbols are nice and they don't increase the size on Flash
+debug = true
 opt-level = "z"
 
 [[package.metadata.esp-idf-sys.extra_components]]
@@ -22,12 +18,13 @@ remote_component = { name = "onewire_bus", version = "^1.0.2" }
 
 [dependencies]
 log = "0.4"
-anyhow = "1.0" # エラーハンドリング用
+anyhow = "1.0"
+simple_ds18b20_temp_sensor = { path = "../../", version = "0.1.0" } # ライブラリ本体へのパス
+esp-idf-svc = "0.51.0" # main.rs で直接使っているので必要
+esp-idf-hal = "0.45.2" # main.rs で直接使っているので必要 (FreeRtos::delay_ms)
 
 [build-dependencies]
 embuild = { version = "0.33", features = ["espidf"] }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "xtensa"))'.dependencies]
-esp-idf-hal = "0.45.2"
-esp-idf-svc = "0.51.0"
 esp-idf-sys = { version = "0.36.1", features = ["native"] }
