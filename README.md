@@ -27,8 +27,8 @@ graph TD
     subgraph "ESP32 Dev Board"
         ESP_3V3[3.3V Pin]
         ESP_GND[GND Pin]
-        ESP_GPIO_DATA[Data Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO4 for XIAO ESP32C3)]
-        ESP_GPIO_POWER[Power Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO20 for XIAO ESP32C3)]
+        ESP_GPIO_DATA["Data Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO4 for XIAO ESP32C3)"]
+        ESP_GPIO_POWER["Power Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO20 for XIAO ESP32C3)"]
     end
 
     subgraph "DS18B20 Sensor"
