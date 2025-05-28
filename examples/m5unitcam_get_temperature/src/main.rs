@@ -1,5 +1,6 @@
-use log::info;
 use anyhow::Result;
+use esp_idf_svc::hal::peripherals::Peripherals;
+use log::info;
 
 // このサンプルを実行する際には、Cargo.tomlでライブラリクレートが
 // 依存関係として正しく設定されている必要があります。
@@ -11,7 +12,6 @@ use anyhow::Result;
 // 今回は同じクレート内のexampleなので、クレート名を直接使えます。
 use simple_ds18b20_temp_sensor::TempSensor;
 
-
 fn main() -> Result<()> {
     // パッチの適用とロガーの初期化
     esp_idf_svc::sys::link_patches();
@@ -21,8 +21,9 @@ fn main() -> Result<()> {
 
     const WAIT_DURATION_MS: u32 = 5 * 1_000; // 5秒をミリ秒に変換
 
+    let peripherals = Peripherals::take()?;
     // 第一引数はpower pin、第二引数はdata pin
-    let mut sensor = TempSensor::new(17, 16)?; // 例: GPIO17, GPIO16
+    let mut sensor = TempSensor::new(17, 16, peripherals.rmt.channel7)?; // Pass specific channel. esp32: channel0 ~ channel7
 
     loop {
         let temp = sensor.read_temperature()?;

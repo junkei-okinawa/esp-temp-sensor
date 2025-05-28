@@ -1,11 +1,11 @@
-use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::gpio::{PinDriver, AnyOutputPin, AnyIOPin, Output};
-use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
-use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_sys::EspError;
-use anyhow::Result;
 use crate::temp_sensor::logic::ds18b20_raw_to_celsius;
-
+use anyhow::Result;
+use esp_idf_svc::hal::delay::FreeRtos;
+use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
+use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
+use esp_idf_svc::hal::peripheral::Peripheral;
+use esp_idf_svc::hal::rmt::RmtChannel;
+use esp_idf_sys::EspError;
 
 pub struct TempSensor {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
@@ -14,13 +14,21 @@ pub struct TempSensor {
 }
 
 impl TempSensor {
-    pub fn new(power_pin_num: i32, data_pin_num: i32) -> Result<Self> {
-        let peripherals = Peripherals::take()?;
+    /// Creates a new `TempSensor`.
+    ///
+    /// # Arguments
+    ///
+    /// * `power_pin_num` - The GPIO pin number for powering the sensor.
+    /// * `data_pin_num`  - The GPIO pin number for data communication with the sensor.
+    /// * `channel`       - The RMT channel (e.g., `peripherals.rmt.channel0`) to be used for the OneWire protocol.
+    ///                     This channel should be exclusively available for this sensor.
+    pub fn new<C: RmtChannel>(
+        power_pin_num: i32,
+        data_pin_num: i32,
+        channel: impl Peripheral<P = C> + 'static,
+    ) -> Result<Self> {
         let power_pin = PinDriver::output(unsafe { AnyOutputPin::new(power_pin_num) })?;
-        let onewire_bus = OWDriver::new(
-            unsafe { AnyIOPin::new(data_pin_num) },
-            peripherals.rmt.channel0,
-        )?;
+        let onewire_bus = OWDriver::new(unsafe { AnyIOPin::new(data_pin_num) }, channel)?;
         Ok(Self {
             power_pin,
             onewire_bus,
@@ -83,4 +91,3 @@ impl TempSensor {
         Ok(temp)
     }
 }
-
