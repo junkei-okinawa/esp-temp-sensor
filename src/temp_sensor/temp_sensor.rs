@@ -13,8 +13,15 @@ pub struct TempSensor {
 }
 
 impl TempSensor {
+    /// Creates a new `TempSensor`.
+    ///
+    /// # Arguments
+    ///
+    /// * `power_pin_num` - The GPIO pin number for powering the sensor.
+    /// * `data_pin_num` - The GPIO pin number for data communication with the sensor.
+    /// * `rmt_channel0` - The RMT channel (CHANNEL0) to be used for the OneWire protocol.
+    ///                    This channel should be exclusively available for this sensor.
     pub fn new(power_pin_num: i32, data_pin_num: i32, rmt_channel0: CHANNEL0) -> Result<Self> {
-        // let peripherals = Peripherals::take()?;
         let power_pin = PinDriver::output(unsafe { AnyOutputPin::new(power_pin_num) })?;
         let onewire_bus = OWDriver::new(unsafe { AnyIOPin::new(data_pin_num) }, rmt_channel0)?;
         Ok(Self {
