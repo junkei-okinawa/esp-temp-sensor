@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     const WAIT_DURATION_MS: u32 = 5 * 1_000; // 5秒をミリ秒に変換
 
     // 第一引数はpower pin、第二引数はdata pin
-    let mut sensor = TempSensor::new(16, 17)?; // 例: GPIO16, GPIO17
+    let mut sensor = TempSensor::new(17, 16)?; // 例: GPIO17, GPIO16
 
     loop {
         let temp = sensor.read_temperature()?;

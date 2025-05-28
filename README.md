@@ -27,8 +27,8 @@ graph TD
     subgraph "ESP32 Dev Board"
         ESP_3V3[3.3V Pin]
         ESP_GND[GND Pin]
-        ESP_GPIO_DATA["Data Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO4 for XIAO ESP32C3)"]
-        ESP_GPIO_POWER["Power Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO20 for XIAO ESP32C3)"]
+        ESP_GPIO_DATA["Data Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO4 for XIAO ESP32C3)"]
+        ESP_GPIO_POWER["Power Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO20 for XIAO ESP32C3)"]
     end
 
     subgraph "DS18B20 Sensor"
@@ -44,13 +44,20 @@ graph TD
 ```
 
 *   **Data Pin:** Any GPIO pin on the ESP32.
-    *   `examples/m5unitcam_get_temperature` uses `GPIO17`.
+    *   `examples/m5unitcam_get_temperature` uses `GPIO16`.
     *   `examples/xiao_esp32c3_get_temperature` uses `GPIO4`.
 *   **Power Pin:** Any GPIO pin on the ESP32. Controls the sensor's power.
-    *   `examples/m5unitcam_get_temperature` uses `GPIO16`.
+    *   `examples/m5unitcam_get_temperature` uses `GPIO17`.
     *   `examples/xiao_esp32c3_get_temperature` uses `GPIO20`.
 *   **3.3V / GND:** Connect to the ESP32's power pins.
 *   **Pull-up Resistor:** Connect a 4.7kΩ resistor between the 3.3V and Data Pin. (Note: A 1kΩ resistor can sometimes be used as an alternative, but 4.7kΩ is generally recommended for stability.)
+
+## Reference
+- M5Stack Unit CAM
+
+  <img src="./examples/m5unitcam_get_temperature/assets/m5stack_unit_cam_wifi_camera.jpeg" style="width: 400px;" />
+
+  *Using a 1kΩ resistor.
 
 ## Setup
 

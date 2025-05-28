@@ -27,8 +27,8 @@ graph TD
     subgraph "ESP32 Dev Board"
         ESP_3V3[3.3V Pin]
         ESP_GND[GND Pin]
-        ESP_GPIO_DATA["Data Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO4 for XIAO ESP32C3)"]
-        ESP_GPIO_POWER["Power Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO20 for XIAO ESP32C3)"]
+        ESP_GPIO_DATA["Data Pin<br>(e.g., GPIO16 for M5UnitCAM, GPIO4 for XIAO ESP32C3)"]
+        ESP_GPIO_POWER["Power Pin<br>(e.g., GPIO17 for M5UnitCAM, GPIO20 for XIAO ESP32C3)"]
         end
 
     subgraph "DS18B20 Sensor"
@@ -44,13 +44,19 @@ graph TD
 ```
 
 *   **Data Pin:** ESP32 の任意の GPIO ピン。
-    *   `examples/m5unitcam_get_temperature` では `GPIO17` を使用。
+    *   `examples/m5unitcam_get_temperature` では `GPIO16` を使用。
     *   `examples/xiao_esp32c3_get_temperature` では `GPIO4` を使用。
 *   **Power Pin:** ESP32 の任意の GPIO ピン。センサーの電源を制御します。
-    *   `examples/m5unitcam_get_temperature` では `GPIO16` を使用。
+    *   `examples/m5unitcam_get_temperature` では `GPIO17` を使用。
     *   `examples/xiao_esp32c3_get_temperature` では `GPIO20` を使用。
 *   **3.3V / GND:** ESP32 の電源ピンに接続。
 *   **プルアップ抵抗:** 3.3V と Data Pin の間に 4.7kΩ の抵抗を接続します。(参考: 1kΩの抵抗も代替として使用できる場合がありますが、一般的には安定性のため4.7kΩが推奨されます)
+## 参考
+- M5Stack Unit CAM
+
+  <img src="./examples/m5unitcam_get_temperature/assets/m5stack_unit_cam_wifi_camera.jpeg" style="width: 400px;" />
+
+  ※抵抗1kΩを使用
 
 ## セットアップ
 
