@@ -1,6 +1,6 @@
 [package]
 name = "simple_ds18b20_temp_sensor"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["junkei_okinawa <ceazy.x2.okinawan@gmail.com>"]
 edition = "2021"
 resolver = "2"
