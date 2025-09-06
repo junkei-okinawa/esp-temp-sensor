@@ -18,7 +18,7 @@ debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [[package.metadata.esp-idf-sys.extra_components]]
-remote_component = { name = "onewire_bus", version = "^1.0.2" }
+remote_component = { name = "onewire_bus", version = "1.0.2" }
 
 [dependencies]
 log = "0.4"
