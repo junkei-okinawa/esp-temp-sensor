@@ -1,7 +1,7 @@
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::{PinDriver, AnyOutputPin, AnyIOPin, Output};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
-use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::peripheral::Peripheral;
 use esp_idf_sys::EspError;
 use anyhow::Result;
 use crate::temp_sensor::logic::ds18b20_raw_to_celsius;
@@ -14,12 +14,31 @@ pub struct TempSensor {
 }
 
 impl TempSensor {
-    pub fn new(power_pin_num: i32, data_pin_num: i32) -> Result<Self> {
-        let peripherals = Peripherals::take()?;
+    /// 外部Peripherals管理でTempSensorを作成（推奨API）
+    /// 
+    /// # Arguments
+    /// * `power_pin_num` - 電源制御用GPIOピン番号
+    /// * `data_pin_num` - データピン番号
+    /// * `rmt_channel` - RMTチャンネル
+    /// 
+    /// # Example
+    /// ```no_run
+    /// use esp_idf_svc::hal::peripherals::Peripherals;
+    /// use simple_ds18b20_temp_sensor::TempSensor;
+    /// 
+    /// let peripherals = Peripherals::take().unwrap();
+    /// let mut temp_sensor = TempSensor::new(2, 3, peripherals.rmt.channel0)?;
+    /// let temperature = temp_sensor.read_temperature()?;
+    /// ```
+    pub fn new<C: esp_idf_svc::hal::rmt::RmtChannel>(
+        power_pin_num: i32, 
+        data_pin_num: i32, 
+        rmt_channel: impl Peripheral<P = C> + 'static
+    ) -> Result<Self> {
         let power_pin = PinDriver::output(unsafe { AnyOutputPin::new(power_pin_num) })?;
         let onewire_bus = OWDriver::new(
             unsafe { AnyIOPin::new(data_pin_num) },
-            peripherals.rmt.channel0,
+            rmt_channel,
         )?;
         Ok(Self {
             power_pin,
