@@ -66,15 +66,7 @@ graph TD
     cd temp_sensor
     ```
 
-2.  **ESP-IDF コンポーネントの確認:**
-    `Cargo.toml` に以下の設定が含まれていることを確認してください。これにより、`esp-idf-hal` の `OWDriver` が必要とする ESP-IDF の `onewire_bus` コンポーネントがビルド時に組み込まれます。
-    ```toml
-    # Cargo.toml (ルートプロジェクトまたは各exampleプロジェクト内)
-    [[package.metadata.esp-idf-sys.extra_components]]
-    remote_component = { name = "onewire_bus", version = "^1.0.2" }
-    ```
-
-3.  **ピン設定の確認 (サンプルアプリケーション):**
+2.  **ピン設定の確認 (サンプルアプリケーション):**
     各サンプルアプリケーション (`examples/m5unitcam_get_temperature/src/main.rs` または `examples/xiao_esp32c3_get_temperature/src/main.rs`) を使用する場合、`TempSensor::new(POWER_PIN, DATA_PIN)` のようにインスタンスを作成している箇所で、実際の配線に合わせて電源ピン番号とデータピン番号を指定してください。
     *   M5Unit CAM サンプル: デフォルトは `TempSensor::new(16, 17)?`
     *   XIAO ESP32C3 サンプル: デフォルトは `TempSensor::new(20, 4)?`

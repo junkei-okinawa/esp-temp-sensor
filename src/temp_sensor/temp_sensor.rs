@@ -14,21 +14,33 @@ pub struct TempSensor {
 }
 
 impl TempSensor {
-    /// Creates a new `TempSensor`.
-    ///
+    /// 外部Peripherals管理でTempSensorを作成（推奨API）
+    /// 
     /// # Arguments
-    ///
-    /// * `power_pin_num` - The GPIO pin number for powering the sensor.
-    /// * `data_pin_num`  - The GPIO pin number for data communication with the sensor.
-    /// * `channel`       - The RMT channel (e.g., `peripherals.rmt.channel0`) to be used for the OneWire protocol.
-    ///                     This channel should be exclusively available for this sensor.
-    pub fn new<C: RmtChannel>(
-        power_pin_num: i32,
-        data_pin_num: i32,
-        channel: impl Peripheral<P = C> + 'static,
+    /// * `power_pin_num` - 電源制御用GPIOピン番号
+    /// * `data_pin_num` - データピン番号
+    /// * `rmt_channel` - RMTチャンネル
+    /// 
+    /// # Example
+    /// ```no_run
+    /// use esp_idf_svc::hal::peripherals::Peripherals;
+    /// use simple_ds18b20_temp_sensor::TempSensor;
+    /// 
+    /// let peripherals = Peripherals::take().unwrap();
+    /// let mut temp_sensor = TempSensor::new(2, 3, peripherals.rmt.channel0)?;
+    /// let temperature = temp_sensor.read_temperature()?;
+    /// ```
+    pub fn new<C: esp_idf_svc::hal::rmt::RmtChannel>(
+        power_pin_num: i32, 
+        data_pin_num: i32, 
+        rmt_channel: impl Peripheral<P = C> + 'static
     ) -> Result<Self> {
         let power_pin = PinDriver::output(unsafe { AnyOutputPin::new(power_pin_num) })?;
-        let onewire_bus = OWDriver::new(unsafe { AnyIOPin::new(data_pin_num) }, channel)?;
+        let onewire_bus = OWDriver::new(
+            unsafe { AnyIOPin::new(data_pin_num) },
+            rmt_channel,
+        )?;
+
         Ok(Self {
             power_pin,
             onewire_bus,

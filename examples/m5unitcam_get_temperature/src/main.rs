@@ -2,6 +2,7 @@ use anyhow::Result;
 use esp_idf_svc::hal::peripherals::Peripherals;
 use log::info;
 
+
 // このサンプルを実行する際には、Cargo.tomlでライブラリクレートが
 // 依存関係として正しく設定されている必要があります。
 // 通常、同じワークスペース内のライブラリを参照する場合、
@@ -21,9 +22,11 @@ fn main() -> Result<()> {
 
     const WAIT_DURATION_MS: u32 = 5 * 1_000; // 5秒をミリ秒に変換
 
-    let peripherals = Peripherals::take()?;
-    // 第一引数はpower pin、第二引数はdata pin
-    let mut sensor = TempSensor::new(17, 16, peripherals.rmt.channel7)?; // Pass specific channel. esp32: channel0 ~ channel7
+    // 周辺機器を取得（アプリケーション側で一度だけ取得して共有）
+    let peripherals = Peripherals::take().unwrap();
+
+    // 外部Peripherals管理API使用 (power pin: GPIO17, data pin: GPIO16)
+    let mut sensor = TempSensor::new(17, 16, peripherals.rmt.channel0)?;
 
     loop {
         let temp = sensor.read_temperature()?;
