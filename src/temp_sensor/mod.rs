@@ -1,4 +1,4 @@
-pub mod logic;       // Declares src/temp_sensor/logic.rs
+pub mod logic; // Declares src/temp_sensor/logic.rs
 
 #[cfg(any(target_arch = "riscv32", target_arch = "xtensa"))]
 pub mod temp_sensor; // Declares src/temp_sensor/temp_sensor.rs

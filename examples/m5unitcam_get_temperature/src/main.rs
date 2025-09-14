@@ -1,6 +1,7 @@
-use log::info;
 use anyhow::Result;
 use esp_idf_svc::hal::peripherals::Peripherals;
+use log::info;
+
 
 // このサンプルを実行する際には、Cargo.tomlでライブラリクレートが
 // 依存関係として正しく設定されている必要があります。
@@ -11,7 +12,6 @@ use esp_idf_svc::hal::peripherals::Peripherals;
 // simple_ds18b20_temp_sensor = "0.1.0" のようになります。
 // 今回は同じクレート内のexampleなので、クレート名を直接使えます。
 use simple_ds18b20_temp_sensor::TempSensor;
-
 
 fn main() -> Result<()> {
     // パッチの適用とロガーの初期化

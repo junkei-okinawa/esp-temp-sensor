@@ -1,11 +1,11 @@
+use crate::temp_sensor::logic::ds18b20_raw_to_celsius;
+use anyhow::Result;
 use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::gpio::{PinDriver, AnyOutputPin, AnyIOPin, Output};
+use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
 use esp_idf_svc::hal::peripheral::Peripheral;
+use esp_idf_svc::hal::rmt::RmtChannel;
 use esp_idf_sys::EspError;
-use anyhow::Result;
-use crate::temp_sensor::logic::ds18b20_raw_to_celsius;
-
 
 pub struct TempSensor {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
@@ -40,6 +40,7 @@ impl TempSensor {
             unsafe { AnyIOPin::new(data_pin_num) },
             rmt_channel,
         )?;
+
         Ok(Self {
             power_pin,
             onewire_bus,
@@ -102,4 +103,3 @@ impl TempSensor {
         Ok(temp)
     }
 }
-

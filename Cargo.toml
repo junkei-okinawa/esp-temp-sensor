@@ -1,6 +1,6 @@
 [package]
 name = "simple_ds18b20_temp_sensor"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["junkei_okinawa <ceazy.x2.okinawan@gmail.com>"]
 edition = "2021"
 resolver = "2"
@@ -18,7 +18,7 @@ debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [[package.metadata.esp-idf-sys.extra_components]]
-remote_component = { name = "onewire_bus", version = "^1.0.2" }
+remote_component = { name = "onewire_bus", version = "1.0.2" }
 
 [dependencies]
 log = "0.4"
