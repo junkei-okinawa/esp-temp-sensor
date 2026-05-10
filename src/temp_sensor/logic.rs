@@ -4,7 +4,7 @@ pub fn ds18b20_raw_to_celsius(lsb: u8, msb: u8) -> f32 {
     f32::from(temp_raw) / 16.0
 }
 
-/// Dallas 1-Wire CRC-8 (poly=0x31, LSB-first)
+/// Dallas 1-Wire CRC-8 (polynomial 0x31 = x^8+x^5+x^4+1, processed LSB-first using reflected constant 0x8C)
 ///
 /// DS18B20 scratchpad の整合性検証に使用。scratch[0..8] の CRC が scratch[8] と一致すること。
 pub fn compute_crc8(data: &[u8]) -> u8 {
@@ -39,6 +39,25 @@ mod tests {
     #[test]
     fn test_zero() {
         assert_eq!(ds18b20_raw_to_celsius(0x00, 0x00), 0.0);
+    }
+
+    #[test]
+    fn test_crc8_known_vector() {
+        // Fixed expected values computed from the Dallas 1-Wire CRC-8 algorithm.
+        // These pin the polynomial/reflection so any regression is immediately visible.
+        // compute_crc8(&[0x01]) = 0x5E, compute_crc8(&[0x02]) = 0xBC
+        assert_eq!(compute_crc8(&[0x01]), 0x5E);
+        assert_eq!(compute_crc8(&[0x02]), 0xBC);
+        // 25.0625°C scratchpad bytes 0..7: [0x91,0x01,0x4B,0x46,0x7F,0xFF,0x0C,0x10] → CRC 0x70
+        assert_eq!(
+            compute_crc8(&[0x91, 0x01, 0x4B, 0x46, 0x7F, 0xFF, 0x0C, 0x10]),
+            0x70
+        );
+        // POR scratchpad bytes 0..7 (temp=85°C): [0x50,0x05,0x4B,0x46,0x7F,0xFF,0x0C,0x10] → CRC 0x1C
+        assert_eq!(
+            compute_crc8(&[0x50, 0x05, 0x4B, 0x46, 0x7F, 0xFF, 0x0C, 0x10]),
+            0x1C
+        );
     }
 
     #[test]

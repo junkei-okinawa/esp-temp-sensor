@@ -142,7 +142,11 @@ impl TempSensor {
 
             let temp = ds18b20_raw_to_celsius(scratch[0], scratch[1]);
 
-            // 85°C は DS18B20 の電源ON時デフォルト値（POR）。変換未完了または電源不安定を示す
+            // 85°C は DS18B20 の電源ON時デフォルト値（POR）。変換未完了または電源不安定を示す。
+            // NOTE: DS18B20 の測定範囲は -55〜+125°C なので、農業・室内環境での実測 85°C は
+            // 現実的でなく POR と見なして差し支えない。85°C が実際に現れる環境では、
+            // scratchpad byte2〜4（TH/TL/Config）を POR デフォルト値と比較することで
+            // 誤検出を低減できる（将来の拡張ポイント）。
             if (temp - 85.0_f32).abs() < 0.01 {
                 warn!(
                     "DS18B20 returned POR default (85.0°C) on attempt {}/{}",
