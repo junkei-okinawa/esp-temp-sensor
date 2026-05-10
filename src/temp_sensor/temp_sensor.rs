@@ -181,7 +181,9 @@ impl TempSensor {
             return Ok(temp);
         }
 
-        let _ = self.power_pin.set_low();
+        if let Err(e) = self.power_pin.set_low() {
+            warn!("Failed to power down DS18B20 after all retries: {e}");
+        }
         Err(last_err)
     }
 }
