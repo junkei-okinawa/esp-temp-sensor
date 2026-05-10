@@ -47,20 +47,18 @@ impl TempSensor {
 
     fn search_device(&mut self) -> Result<OWAddress, EspError> {
         let mut addr = None;
-        for dev in self.onewire_bus.search()? {
-            if let Ok(a) = dev {
-                if a.family_code() == 0x28 {
-                    addr = Some(a);
-                    break;
-                }
+        for a in self.onewire_bus.search()?.flatten() {
+            if a.family_code() == 0x28 {
+                addr = Some(a);
+                break;
             }
         }
-        addr.ok_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND as i32).unwrap())
+        addr.ok_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND).unwrap())
     }
 
     pub fn read_temperature(&mut self) -> Result<f32, EspError> {
         const MAX_RETRIES: u8 = 3;
-        let mut last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_RESPONSE as i32).unwrap();
+        let mut last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_RESPONSE).unwrap();
 
         for attempt in 0..MAX_RETRIES {
             if attempt > 0 {
@@ -156,7 +154,7 @@ impl TempSensor {
                     MAX_RETRIES,
                     scratch
                 );
-                last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_CRC as i32).unwrap();
+                last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_CRC).unwrap();
                 continue;
             }
 
@@ -173,7 +171,7 @@ impl TempSensor {
                     attempt + 1,
                     MAX_RETRIES
                 );
-                last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_RESPONSE as i32).unwrap();
+                last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_RESPONSE).unwrap();
                 continue;
             }
 
