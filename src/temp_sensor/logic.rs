@@ -6,7 +6,7 @@ pub fn ds18b20_raw_to_celsius(lsb: u8, msb: u8) -> f32 {
 
 /// Dallas 1-Wire CRC-8 (polynomial 0x31 = x^8+x^5+x^4+1, processed LSB-first using reflected constant 0x8C)
 ///
-/// DS18B20 scratchpad の整合性検証に使用。scratch[0..8] の CRC が scratch[8] と一致すること。
+/// DS18B20 scratchpad の整合性検証に使用。先頭 8 バイト (byte 0〜7) の CRC が byte[8] と一致すること。
 pub fn compute_crc8(data: &[u8]) -> u8 {
     let mut crc = 0u8;
     for &byte in data {

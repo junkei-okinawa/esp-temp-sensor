@@ -4,7 +4,6 @@ use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
 use esp_idf_svc::hal::peripheral::Peripheral;
-use esp_idf_svc::hal::rmt::RmtChannel;
 use esp_idf_sys::EspError;
 use log::warn;
 
@@ -34,13 +33,10 @@ impl TempSensor {
     pub fn new<C: esp_idf_svc::hal::rmt::RmtChannel>(
         power_pin_num: i32,
         data_pin_num: i32,
-        rmt_channel: impl Peripheral<P = C> + 'static
+        rmt_channel: impl Peripheral<P = C> + 'static,
     ) -> Result<Self> {
         let power_pin = PinDriver::output(unsafe { AnyOutputPin::new(power_pin_num) })?;
-        let onewire_bus = OWDriver::new(
-            unsafe { AnyIOPin::new(data_pin_num) },
-            rmt_channel,
-        )?;
+        let onewire_bus = OWDriver::new(unsafe { AnyIOPin::new(data_pin_num) }, rmt_channel)?;
 
         Ok(Self {
             power_pin,
@@ -85,7 +81,11 @@ impl TempSensor {
                         a
                     }
                     Err(e) => {
-                        warn!("DS18B20 search failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                        warn!(
+                            "DS18B20 search failed (attempt {}/{}): {e}",
+                            attempt + 1,
+                            MAX_RETRIES
+                        );
                         last_err = e;
                         continue;
                     }
@@ -94,7 +94,11 @@ impl TempSensor {
 
             // 温度変換コマンド送信
             if let Err(e) = self.onewire_bus.reset() {
-                warn!("1-Wire reset failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                warn!(
+                    "1-Wire reset failed (attempt {}/{}): {e}",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 last_err = e;
                 continue;
             }
@@ -103,7 +107,11 @@ impl TempSensor {
             buf[1..9].copy_from_slice(&addr.address().to_le_bytes());
             buf[9] = 0x44; // ConvertTemp
             if let Err(e) = self.onewire_bus.write(&buf) {
-                warn!("ConvertTemp failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                warn!(
+                    "ConvertTemp failed (attempt {}/{}): {e}",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 last_err = e;
                 continue;
             }
@@ -111,24 +119,36 @@ impl TempSensor {
 
             // Scratchpad読み出し
             if let Err(e) = self.onewire_bus.reset() {
-                warn!("1-Wire reset failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                warn!(
+                    "1-Wire reset failed (attempt {}/{}): {e}",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 last_err = e;
                 continue;
             }
             buf[9] = 0xBE; // ReadScratchpad
             if let Err(e) = self.onewire_bus.write(&buf) {
-                warn!("ReadScratch failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                warn!(
+                    "ReadScratch failed (attempt {}/{}): {e}",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 last_err = e;
                 continue;
             }
             let mut scratch = [0u8; 9];
             if let Err(e) = self.onewire_bus.read(&mut scratch) {
-                warn!("Scratchpad read failed (attempt {}/{}): {e}", attempt + 1, MAX_RETRIES);
+                warn!(
+                    "Scratchpad read failed (attempt {}/{}): {e}",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 last_err = e;
                 continue;
             }
 
-            // CRC検証: DS18B20 scratchpad[8] は scratchpad[0..8] のCRC
+            // CRC検証: scratchpad の先頭 8 バイト (byte 0〜7) の CRC が byte[8] と一致すること
             if compute_crc8(&scratch[0..8]) != scratch[8] {
                 warn!(
                     "DS18B20 CRC mismatch on attempt {}/{}: scratch={:02X?}",
