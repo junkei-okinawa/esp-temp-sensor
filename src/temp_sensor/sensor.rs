@@ -47,13 +47,20 @@ impl TempSensor {
 
     fn search_device(&mut self) -> Result<OWAddress, EspError> {
         let mut addr = None;
-        for a in self.onewire_bus.search()?.flatten() {
-            if a.family_code() == 0x28 {
-                addr = Some(a);
-                break;
+        let mut last_bus_err: Option<EspError> = None;
+        for dev in self.onewire_bus.search()? {
+            match dev {
+                Ok(a) if a.family_code() == 0x28 => {
+                    addr = Some(a);
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => last_bus_err = Some(e),
             }
         }
-        addr.ok_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND).unwrap())
+        addr.ok_or_else(|| {
+            last_bus_err.unwrap_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND).unwrap())
+        })
     }
 
     pub fn read_temperature(&mut self) -> Result<f32, EspError> {
