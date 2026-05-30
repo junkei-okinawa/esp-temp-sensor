@@ -107,7 +107,7 @@ impl TempSensor {
                 // リトライ前にパワーサイクルしてデバイスをリセット
                 self.power_pin.set_low()?;
                 FreeRtos::delay_ms(50);
-                self.device_address = None; // 再検索を強制
+                self.device_address = None;
                 // RMT チャンネルの FSM が詰まっている可能性があるため再初期化する
                 if let Err(e) = self.reinit_bus() {
                     warn!(
