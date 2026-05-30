@@ -10,7 +10,7 @@ use log::warn;
 
 pub struct TempSensor {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
-    onewire_bus: OWDriver<'static>,
+    onewire_bus: Option<OWDriver<'static>>,
     device_address: Option<OWAddress>,
     data_pin_num: i32,
 }
@@ -42,7 +42,7 @@ impl TempSensor {
 
         Ok(Self {
             power_pin,
-            onewire_bus,
+            onewire_bus: Some(onewire_bus),
             device_address: None,
             data_pin_num,
         })
@@ -51,7 +51,8 @@ impl TempSensor {
     fn search_device(&mut self) -> Result<OWAddress, EspError> {
         let mut addr = None;
         let mut last_bus_err: Option<EspError> = None;
-        for dev in self.onewire_bus.search()? {
+        let bus = self.onewire_bus.as_mut().expect("OWDriver not initialized");
+        for dev in bus.search()? {
             match dev {
                 Ok(a) if a.family_code() == 0x28 => {
                     addr = Some(a);
@@ -75,17 +76,25 @@ impl TempSensor {
     ///
     /// `espressif/onewire_bus v1.0.2` では `onewire_bus_rmt_reset` がタイムアウトしたとき
     /// RMT RX チャンネルの FSM が `RMT_FSM_RUN` で詰まったままになるバグがある。
-    /// OWDriver をドロップ（`onewire_bus_del` → `rmt_disable` + `rmt_del_channel`）して
-    /// 再生成することで FSM をリセットする。
+    ///
+    /// `take()` で旧 `OWDriver` を先に解放（`onewire_bus_del` → `rmt_disable` +
+    /// `rmt_del_channel`）してから新しい `OWDriver` を生成することで、
+    /// 旧チャンネルが完全に解放された後に新チャンネルが確保されることを保証する。
+    /// Rust の代入は右辺を評価してから旧値をドロップするため、フィールドへの直接代入
+    /// (`self.onewire_bus = OWDriver::new(...)`) では旧ドライバが生存したまま
+    /// 新ドライバが生成されてしまい、意図した順序にならない。
     ///
     /// CHANNEL0 はRustの所有権システム用の型トークンとして渡すだけで、
     /// `onewire_new_bus_rmt` は内部で ESP-IDF プールから独自に RMT チャンネルを確保するため
     /// 渡すチャンネルの種類は問わない。
     fn reinit_bus(&mut self) -> Result<(), EspError> {
-        self.onewire_bus = OWDriver::new(
+        // 旧ドライバを先にドロップして RMT チャンネルを解放する
+        drop(self.onewire_bus.take());
+        // 旧チャンネルが解放された後に新しい OWDriver を生成する
+        self.onewire_bus = Some(OWDriver::new(
             unsafe { AnyIOPin::new(self.data_pin_num) },
             unsafe { CHANNEL0::new() },
-        )?;
+        )?);
         Ok(())
     }
 
@@ -133,8 +142,10 @@ impl TempSensor {
                 },
             };
 
+            let bus = self.onewire_bus.as_mut().expect("OWDriver not initialized");
+
             // 温度変換コマンド送信
-            if let Err(e) = self.onewire_bus.reset() {
+            if let Err(e) = bus.reset() {
                 warn!(
                     "1-Wire reset failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -147,7 +158,7 @@ impl TempSensor {
             buf[0] = OWCommand::MatchRom as _;
             buf[1..9].copy_from_slice(&addr.address().to_le_bytes());
             buf[9] = 0x44; // ConvertTemp
-            if let Err(e) = self.onewire_bus.write(&buf) {
+            if let Err(e) = bus.write(&buf) {
                 warn!(
                     "ConvertTemp failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -159,7 +170,7 @@ impl TempSensor {
             FreeRtos::delay_ms(800);
 
             // Scratchpad読み出し
-            if let Err(e) = self.onewire_bus.reset() {
+            if let Err(e) = bus.reset() {
                 warn!(
                     "1-Wire reset failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -169,7 +180,7 @@ impl TempSensor {
                 continue;
             }
             buf[9] = 0xBE; // ReadScratchpad
-            if let Err(e) = self.onewire_bus.write(&buf) {
+            if let Err(e) = bus.write(&buf) {
                 warn!(
                     "ReadScratch failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -179,7 +190,7 @@ impl TempSensor {
                 continue;
             }
             let mut scratch = [0u8; 9];
-            if let Err(e) = self.onewire_bus.read(&mut scratch) {
+            if let Err(e) = bus.read(&mut scratch) {
                 warn!(
                     "Scratchpad read failed (attempt {}/{}): {e}",
                     attempt + 1,
