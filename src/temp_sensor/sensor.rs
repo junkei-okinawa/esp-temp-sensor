@@ -51,7 +51,10 @@ impl TempSensor {
     fn search_device(&mut self) -> Result<OWAddress, EspError> {
         let mut addr = None;
         let mut last_bus_err: Option<EspError> = None;
-        let bus = self.onewire_bus.as_mut().expect("OWDriver not initialized");
+        let bus = self
+            .onewire_bus
+            .as_mut()
+            .ok_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_INVALID_STATE).unwrap())?;
         for dev in bus.search()? {
             match dev {
                 Ok(a) if a.family_code() == 0x28 => {
@@ -142,7 +145,15 @@ impl TempSensor {
                 },
             };
 
-            let bus = self.onewire_bus.as_mut().expect("OWDriver not initialized");
+            let bus = match self.onewire_bus.as_mut() {
+                Some(b) => b,
+                None => {
+                    // reinit_bus() が失敗すると onewire_bus が None のままになる。
+                    // パニックせず EspError を返してリトライループに戻す。
+                    last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_STATE).unwrap();
+                    continue;
+                }
+            };
 
             // 温度変換コマンド送信
             if let Err(e) = bus.reset() {
