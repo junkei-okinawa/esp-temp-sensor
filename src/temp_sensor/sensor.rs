@@ -4,6 +4,7 @@ use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
 use esp_idf_svc::hal::peripheral::Peripheral;
+use esp_idf_svc::hal::rmt::CHANNEL0;
 use esp_idf_sys::EspError;
 use log::warn;
 
@@ -11,6 +12,7 @@ pub struct TempSensor {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
     onewire_bus: OWDriver<'static>,
     device_address: Option<OWAddress>,
+    data_pin_num: i32,
 }
 
 impl TempSensor {
@@ -42,6 +44,7 @@ impl TempSensor {
             power_pin,
             onewire_bus,
             device_address: None,
+            data_pin_num,
         })
     }
 
@@ -55,12 +58,35 @@ impl TempSensor {
                     break;
                 }
                 Ok(_) => {}
-                Err(e) => last_bus_err = Some(e),
+                Err(e) => {
+                    last_bus_err = Some(e);
+                    break; // バスエラー発生時はイテレーションを即停止する。
+                           // onewire_bus_rmt_reset タイムアウト後は RMT FSM が RMT_FSM_RUN
+                           // で詰まるため、継続するとエラーが無限ループになる。
+                }
             }
         }
         addr.ok_or_else(|| {
             last_bus_err.unwrap_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND).unwrap())
         })
+    }
+
+    /// 1-Wire バスを再初期化して RMT チャンネルの FSM をリセットする。
+    ///
+    /// `espressif/onewire_bus v1.0.2` では `onewire_bus_rmt_reset` がタイムアウトしたとき
+    /// RMT RX チャンネルの FSM が `RMT_FSM_RUN` で詰まったままになるバグがある。
+    /// OWDriver をドロップ（`onewire_bus_del` → `rmt_disable` + `rmt_del_channel`）して
+    /// 再生成することで FSM をリセットする。
+    ///
+    /// CHANNEL0 はRustの所有権システム用の型トークンとして渡すだけで、
+    /// `onewire_new_bus_rmt` は内部で ESP-IDF プールから独自に RMT チャンネルを確保するため
+    /// 渡すチャンネルの種類は問わない。
+    fn reinit_bus(&mut self) -> Result<(), EspError> {
+        self.onewire_bus = OWDriver::new(
+            unsafe { AnyIOPin::new(self.data_pin_num) },
+            unsafe { CHANNEL0::new() },
+        )?;
+        Ok(())
     }
 
     pub fn read_temperature(&mut self) -> Result<f32, EspError> {
@@ -73,6 +99,16 @@ impl TempSensor {
                 self.power_pin.set_low()?;
                 FreeRtos::delay_ms(50);
                 self.device_address = None; // 再検索を強制
+                // RMT チャンネルの FSM が詰まっている可能性があるため再初期化する
+                if let Err(e) = self.reinit_bus() {
+                    warn!(
+                        "Failed to reinit 1-Wire bus (attempt {}/{}): {e}",
+                        attempt + 1,
+                        MAX_RETRIES
+                    );
+                    last_err = e;
+                    continue;
+                }
             }
 
             self.power_pin.set_high()?;
