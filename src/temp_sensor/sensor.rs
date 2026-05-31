@@ -4,13 +4,15 @@ use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
 use esp_idf_svc::hal::peripheral::Peripheral;
+use esp_idf_svc::hal::rmt::CHANNEL0;
 use esp_idf_sys::EspError;
 use log::warn;
 
 pub struct TempSensor {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
-    onewire_bus: OWDriver<'static>,
+    onewire_bus: Option<OWDriver<'static>>,
     device_address: Option<OWAddress>,
+    data_pin_num: i32,
 }
 
 impl TempSensor {
@@ -40,27 +42,69 @@ impl TempSensor {
 
         Ok(Self {
             power_pin,
-            onewire_bus,
+            onewire_bus: Some(onewire_bus),
             device_address: None,
+            data_pin_num,
         })
     }
 
     fn search_device(&mut self) -> Result<OWAddress, EspError> {
         let mut addr = None;
         let mut last_bus_err: Option<EspError> = None;
-        for dev in self.onewire_bus.search()? {
+        let bus = self
+            .onewire_bus
+            .as_mut()
+            .ok_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_INVALID_STATE).unwrap())?;
+        for dev in bus.search()? {
             match dev {
                 Ok(a) if a.family_code() == 0x28 => {
                     addr = Some(a);
                     break;
                 }
                 Ok(_) => {}
-                Err(e) => last_bus_err = Some(e),
+                Err(e) => {
+                    last_bus_err = Some(e);
+                    break; // バスエラー発生時はイテレーションを即停止する。
+                           // onewire_bus_rmt_reset タイムアウト後は RMT FSM が RMT_FSM_RUN
+                           // で詰まるため、継続するとエラーが無限ループになる。
+                }
             }
         }
         addr.ok_or_else(|| {
             last_bus_err.unwrap_or_else(|| EspError::from(esp_idf_sys::ESP_ERR_NOT_FOUND).unwrap())
         })
+    }
+
+    /// 1-Wire バスを再初期化して RMT チャンネルの FSM をリセットする。
+    ///
+    /// `espressif/onewire_bus v1.0.2` では `onewire_bus_rmt_reset` がタイムアウトしたとき
+    /// RMT RX チャンネルの FSM が `RMT_FSM_RUN` で詰まったままになるバグがある。
+    ///
+    /// `take()` で旧 `OWDriver` を先に解放（`onewire_bus_del` → `rmt_disable` +
+    /// `rmt_del_channel`）してから新しい `OWDriver` を生成することで、
+    /// 旧チャンネルが完全に解放された後に新チャンネルが確保されることを保証する。
+    /// Rust の代入は右辺を評価してから旧値をドロップするため、フィールドへの直接代入
+    /// (`self.onewire_bus = OWDriver::new(...)`) では旧ドライバが生存したまま
+    /// 新ドライバが生成されてしまい、意図した順序にならない。
+    ///
+    /// # CHANNEL0 トークンについて
+    ///
+    /// `onewire_new_bus_rmt` (ESP-IDF) は Rust 側のチャンネル型を一切無視し、
+    /// ESP-IDF 独自のプールから TX/RX チャンネルを動的に確保する。
+    /// したがって `CHANNEL0` は Rust の型システムを満たすための phantom token に過ぎず、
+    /// 元のセンサー作成時に使ったチャンネルが何であっても実際のハードウェア競合は生じない。
+    /// また `CHANNEL0::new()` は `unsafe` であり、この点を呼び出し元に明示している。
+    fn reinit_bus(&mut self) -> Result<(), EspError> {
+        // 旧ドライバを先にドロップして RMT チャンネルを解放する
+        drop(self.onewire_bus.take());
+        // 旧チャンネルが解放された後に新しい OWDriver を生成する。
+        // SAFETY: CHANNEL0 は phantom token（onewire_new_bus_rmt はチャンネル型を無視）。
+        // 元のドライバは take() で解放済みのため、同じ ESP-IDF チャンネルが再確保される。
+        self.onewire_bus = Some(OWDriver::new(
+            unsafe { AnyIOPin::new(self.data_pin_num) },
+            unsafe { CHANNEL0::new() },
+        )?);
+        Ok(())
     }
 
     pub fn read_temperature(&mut self) -> Result<f32, EspError> {
@@ -72,7 +116,17 @@ impl TempSensor {
                 // リトライ前にパワーサイクルしてデバイスをリセット
                 self.power_pin.set_low()?;
                 FreeRtos::delay_ms(50);
-                self.device_address = None; // 再検索を強制
+                self.device_address = None;
+                // RMT チャンネルの FSM が詰まっている可能性があるため再初期化する
+                if let Err(e) = self.reinit_bus() {
+                    warn!(
+                        "Failed to reinit 1-Wire bus (attempt {}/{}): {e}",
+                        attempt + 1,
+                        MAX_RETRIES
+                    );
+                    last_err = e;
+                    continue;
+                }
             }
 
             self.power_pin.set_high()?;
@@ -97,8 +151,18 @@ impl TempSensor {
                 },
             };
 
+            let bus = match self.onewire_bus.as_mut() {
+                Some(b) => b,
+                None => {
+                    // reinit_bus() が失敗すると onewire_bus が None のままになる。
+                    // パニックせず EspError を返してリトライループに戻す。
+                    last_err = EspError::from(esp_idf_sys::ESP_ERR_INVALID_STATE).unwrap();
+                    continue;
+                }
+            };
+
             // 温度変換コマンド送信
-            if let Err(e) = self.onewire_bus.reset() {
+            if let Err(e) = bus.reset() {
                 warn!(
                     "1-Wire reset failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -111,7 +175,7 @@ impl TempSensor {
             buf[0] = OWCommand::MatchRom as _;
             buf[1..9].copy_from_slice(&addr.address().to_le_bytes());
             buf[9] = 0x44; // ConvertTemp
-            if let Err(e) = self.onewire_bus.write(&buf) {
+            if let Err(e) = bus.write(&buf) {
                 warn!(
                     "ConvertTemp failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -123,7 +187,7 @@ impl TempSensor {
             FreeRtos::delay_ms(800);
 
             // Scratchpad読み出し
-            if let Err(e) = self.onewire_bus.reset() {
+            if let Err(e) = bus.reset() {
                 warn!(
                     "1-Wire reset failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -133,7 +197,7 @@ impl TempSensor {
                 continue;
             }
             buf[9] = 0xBE; // ReadScratchpad
-            if let Err(e) = self.onewire_bus.write(&buf) {
+            if let Err(e) = bus.write(&buf) {
                 warn!(
                     "ReadScratch failed (attempt {}/{}): {e}",
                     attempt + 1,
@@ -143,7 +207,7 @@ impl TempSensor {
                 continue;
             }
             let mut scratch = [0u8; 9];
-            if let Err(e) = self.onewire_bus.read(&mut scratch) {
+            if let Err(e) = bus.read(&mut scratch) {
                 warn!(
                     "Scratchpad read failed (attempt {}/{}): {e}",
                     attempt + 1,
