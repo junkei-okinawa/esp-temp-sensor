@@ -1,21 +1,23 @@
 use crate::temp_sensor::logic::{compute_crc8, ds18b20_raw_to_celsius};
 use anyhow::Result;
+use core::marker::PhantomData;
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::{AnyIOPin, AnyOutputPin, Output, PinDriver};
 use esp_idf_svc::hal::onewire::{OWAddress, OWCommand, OWDriver};
 use esp_idf_svc::hal::peripheral::Peripheral;
-use esp_idf_svc::hal::rmt::CHANNEL0;
+use esp_idf_svc::hal::rmt::RmtChannel;
 use esp_idf_sys::EspError;
 use log::warn;
 
-pub struct TempSensor {
+pub struct TempSensor<C: RmtChannel + 'static> {
     power_pin: PinDriver<'static, AnyOutputPin, Output>,
     onewire_bus: Option<OWDriver<'static>>,
     device_address: Option<OWAddress>,
     data_pin_num: i32,
+    _rmt_channel: PhantomData<C>,
 }
 
-impl TempSensor {
+impl<C: RmtChannel + 'static> TempSensor<C> {
     /// 外部Peripherals管理でTempSensorを作成（推奨API）
     ///
     /// # Arguments
@@ -32,7 +34,7 @@ impl TempSensor {
     /// let mut temp_sensor = TempSensor::new(2, 3, peripherals.rmt.channel0)?;
     /// let temperature = temp_sensor.read_temperature()?;
     /// ```
-    pub fn new<C: esp_idf_svc::hal::rmt::RmtChannel>(
+    pub fn new(
         power_pin_num: i32,
         data_pin_num: i32,
         rmt_channel: impl Peripheral<P = C> + 'static,
@@ -45,6 +47,7 @@ impl TempSensor {
             onewire_bus: Some(onewire_bus),
             device_address: None,
             data_pin_num,
+            _rmt_channel: PhantomData,
         })
     }
 
@@ -87,16 +90,24 @@ impl TempSensor {
     /// (`self.onewire_bus = OWDriver::new(...)`) では旧ドライバが生存したまま
     /// 新ドライバが生成されてしまい、意図した順序にならない。
     ///
-    /// CHANNEL0 はRustの所有権システム用の型トークンとして渡すだけで、
-    /// `onewire_new_bus_rmt` は内部で ESP-IDF プールから独自に RMT チャンネルを確保するため
-    /// 渡すチャンネルの種類は問わない。
+    /// # Safety of channel token recreation
+    ///
+    /// `esp-idf-hal` の `impl_peripheral!` マクロで生成される RMT チャンネル型は
+    /// `PhantomData<*const ()>` のみを持つゼロサイズ型（ZST）であるため、
+    /// `mem::zeroed::<C>()` は常に有効なインスタンスを生成する。
+    /// また元のチャンネル `C` は `TempSensor::new` で消費済み（唯一の所有者は
+    /// 本構造体）であるため、同一型のトークンを再生成しても二重所有にはならない。
+    /// `onewire_new_bus_rmt` は Rust 側のチャンネル型を無視して ESP-IDF プールから
+    /// 独自にチャンネルを確保するため、ハードウェア競合も発生しない。
     fn reinit_bus(&mut self) -> Result<(), EspError> {
         // 旧ドライバを先にドロップして RMT チャンネルを解放する
         drop(self.onewire_bus.take());
-        // 旧チャンネルが解放された後に新しい OWDriver を生成する
+        // 旧チャンネルが解放された後に元のチャンネル型 C で新しい OWDriver を生成する。
+        // SAFETY: C は ZST（impl_peripheral! 生成型）なので mem::zeroed は有効。
+        // 元の C は TempSensor::new で消費済みなので二重所有にならない。
         self.onewire_bus = Some(OWDriver::new(
             unsafe { AnyIOPin::new(self.data_pin_num) },
-            unsafe { CHANNEL0::new() },
+            unsafe { core::mem::zeroed::<C>() },
         )?);
         Ok(())
     }
